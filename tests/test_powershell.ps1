@@ -134,7 +134,8 @@ $scriptContent = Get-Content $ScriptPath -Raw -Encoding UTF8
 if ($scriptContent -notmatch '`e\[' -and
     $scriptContent -notmatch 'COLOR_' -and
     $scriptContent -notmatch 'BackgroundColor' -and
-    $scriptContent -match '\*\* \$\(\$i \+ 1\)\.') {
+    $scriptContent -notmatch '\*\* \$\(\$i \+ 1\)\.' -and
+    $scriptContent -match '\* \$\(\$i \+ 1\)\.') {
     Test-Pass "PowerShell UI uses plain text selection markers"
 } else {
     Test-Fail "PowerShell UI selection" "raw ANSI/background colors are present or plain text marker is missing"

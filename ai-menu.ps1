@@ -82,7 +82,7 @@ function Select-Menu {
         
         for ($i = 0; $i -lt $optionCount; $i++) {
             if ($i -eq $selected) {
-                Write-Host "** $($i + 1). $($Options[$i]) **"
+                Write-Host "* $($i + 1). $($Options[$i]) *"
             } else {
                 Write-Host " $($i + 1). $($Options[$i])"
             }
@@ -1218,7 +1218,7 @@ function Start-MainMenu {
         # 显示主菜单选项（带高亮）
         for ($i = 0; $i -lt $optionCount; $i++) {
             if ($i -eq $selected) {
-                Write-Host "** $($i + 1). $($script:MAIN_MENU_OPTIONS[$i]) **"
+                Write-Host "* $($i + 1). $($script:MAIN_MENU_OPTIONS[$i]) *"
             } else {
                 Write-Host " $($i + 1). $($script:MAIN_MENU_OPTIONS[$i])"
             }
