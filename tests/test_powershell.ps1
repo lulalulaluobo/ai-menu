@@ -133,10 +133,10 @@ Write-Host "[T6c] PowerShell UI selection rendering"
 $scriptContent = Get-Content $ScriptPath -Raw -Encoding UTF8
 if ($scriptContent -notmatch '`e\[' -and
     $scriptContent -notmatch 'COLOR_' -and
-    $scriptContent -notmatch 'BackgroundColor' -and
     $scriptContent -notmatch '\*\* \$\(\$i \+ 1\)\.' -and
-    $scriptContent -match '\* \$\(\$i \+ 1\)\.') {
-    Test-Pass "PowerShell UI uses plain text selection markers"
+    $scriptContent -notmatch '\* \$\(\$i \+ 1\)\.' -and
+    $scriptContent -match 'ForegroundColor Black -BackgroundColor White') {
+    Test-Pass "PowerShell UI uses native white-background selection"
 } else {
     Test-Fail "PowerShell UI selection" "raw ANSI/background colors are present or plain text marker is missing"
 }
