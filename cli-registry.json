@@ -1,0 +1,64 @@
+{
+  "codex": {
+    "name": "Codex CLI",
+    "bin": "codex",
+    "npm_package": "@openai/codex",
+    "install": "npm i -g @openai/codex",
+    "update": "npm i -g @openai/codex@latest",
+    "uninstall": "npm uninstall -g @openai/codex",
+    "start": "codex",
+    "login": "codex login",
+    "logout": "codex logout",
+    "auto_logout": true
+  },
+  "gemini": {
+    "name": "Gemini CLI",
+    "bin": "gemini",
+    "npm_package": "@anthropic-ai/gemini-cli",
+    "install": "npm i -g @anthropic-ai/gemini-cli",
+    "update": "npm i -g @anthropic-ai/gemini-cli@latest",
+    "uninstall": "npm uninstall -g @anthropic-ai/gemini-cli",
+    "start": "gemini",
+    "login": "gemini login",
+    "logout": null,
+    "auto_logout": false,
+    "logout_guide": "请在 Gemini CLI 中输入 /auth 切换账号"
+  },
+  "claude": {
+    "name": "Claude Code",
+    "bin": "claude",
+    "npm_package": "@anthropic-ai/claude-code",
+    "install": "npm i -g @anthropic-ai/claude-code",
+    "update": "npm i -g @anthropic-ai/claude-code@latest",
+    "uninstall": "npm uninstall -g @anthropic-ai/claude-code",
+    "start": "claude",
+    "login": "claude login",
+    "logout": "claude logout",
+    "auto_logout": true
+  },
+  "opencode": {
+    "name": "OpenCode",
+    "bin": "opencode",
+    "npm_package": "opencode-ai",
+    "install": "npm i -g opencode-ai",
+    "update": "npm i -g opencode-ai@latest",
+    "uninstall": "npm uninstall -g opencode-ai",
+    "start": "opencode",
+    "login": null,
+    "logout": null,
+    "auto_logout": false,
+    "logout_guide": "OpenCode 通过配置文件管理认证，请参考官方文档"
+  },
+  "deepseek-tui": {
+    "name": "DeepSeek TUI",
+    "bin": "deepseek-tui",
+    "npm_package": null,
+    "install": null,
+    "status": "pending-research",
+    "install_guide": "请按 DeepSeek TUI 官方文档安装：https://github.com/deepseek-ai/deepseek-tui",
+    "start": "deepseek-tui",
+    "login": null,
+    "logout": null,
+    "auto_logout": false
+  }
+}
