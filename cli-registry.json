@@ -60,5 +60,18 @@
     "login": null,
     "logout": null,
     "auto_logout": false
+  },
+  "claude-glm": {
+    "name": "Claude GLM (智谱)",
+    "bin": "claude",
+    "npm_package": "@z_ai/coding-helper",
+    "install": "npx @z_ai/coding-helper",
+    "update": "npx @z_ai/coding-helper",
+    "uninstall": null,
+    "start": "claude",
+    "login": "claude login",
+    "logout": "claude logout",
+    "auto_logout": true,
+    "description": "智谱 GLM 的 Claude Code 安装脚本"
   }
 }

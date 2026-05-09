@@ -52,10 +52,10 @@ if (Get-Command Select-Menu -ErrorAction SilentlyContinue) {
 # --- T4: Main menu options ---
 Write-Host "[T4] Main menu options"
 if ($null -ne (Get-Variable -Name MAIN_MENU_OPTIONS -ErrorAction SilentlyContinue)) {
-    if ($MAIN_MENU_OPTIONS.Count -eq 7) {
-        Test-Pass "7 main menu options defined"
+    if ($MAIN_MENU_OPTIONS.Count -eq 5) {
+        Test-Pass "5 main menu options defined"
     } else {
-        Test-Fail "main menu options" "expected 7, got $($MAIN_MENU_OPTIONS.Count)"
+        Test-Fail "main menu options" "expected 5, got $($MAIN_MENU_OPTIONS.Count)"
     }
 } else {
     Test-Fail "main menu options" "variable not defined"
@@ -79,17 +79,17 @@ if (Get-Command Load-CliRegistry -ErrorAction SilentlyContinue) {
 }
 
 # --- T6: Profile utility functions ---
-Write-Host "[T6] Profile utility functions"
-$profileFuncs = @("Read-Profile", "Write-Profile", "Get-ActiveProfile", "Set-ActiveProfile", "Hide-ApiKey")
+Write-Host "[T6] Core utility functions"
+$coreFuncs = @("Hide-ApiKey", "Hide-SensitiveInfo", "Load-CliRegistry", "Get-CliInstalled")
 $allFound = $true
-foreach ($fn in $profileFuncs) {
+foreach ($fn in $coreFuncs) {
     if (-not (Get-Command $fn -ErrorAction SilentlyContinue)) {
         $allFound = $false
         Test-Fail $fn "function not found"
     }
 }
 if ($allFound) {
-    Test-Pass "All profile utility functions exist"
+    Test-Pass "All core utility functions exist"
 }
 
 # --- T7: Hide-ApiKey function ---

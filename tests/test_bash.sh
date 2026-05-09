@@ -16,7 +16,7 @@ echo ""
 
 # --- Test: Script syntax check ---
 echo "[T1] Syntax check"
-if bash -n "$SCRIPT_DIR/ai-menu.sh" 2>/dev/null; then
+if bash -n "$SCRIPT_DIR/ai-menu.sh"; then
     pass "ai-menu.sh has valid syntax"
 else
     fail "ai-menu.sh syntax" "bash -n failed"
@@ -24,7 +24,7 @@ fi
 
 # --- Test: Script sources without error in non-interactive mode ---
 echo "[T2] Source check (non-interactive)"
-if bash -c "source '$SCRIPT_DIR/ai-menu.sh' --source-only" 2>/dev/null; then
+if bash -c "source '$SCRIPT_DIR/ai-menu.sh' --source-only"; then
     pass "ai-menu.sh sources cleanly"
 else
     fail "ai-menu.sh source" "source failed"
@@ -40,10 +40,10 @@ fi
 
 # --- Test: Main menu options defined ---
 echo "[T4] Main menu options"
-if bash -c "source '$SCRIPT_DIR/ai-menu.sh' --source-only; [[ \${#MAIN_MENU_OPTIONS[@]} -eq 7 ]]" 2>/dev/null; then
-    pass "7 main menu options defined"
+if bash -c "source '$SCRIPT_DIR/ai-menu.sh' --source-only; [[ \${#MAIN_MENU_OPTIONS[@]} -eq 5 ]]" 2>/dev/null; then
+    pass "5 main menu options defined"
 else
-    fail "main menu options" "expected 7 options"
+    fail "main menu options" "expected 5 options"
 fi
 
 # --- Test: CLI registry loading ---
@@ -54,18 +54,18 @@ else
     fail "CLI registry" "failed to load"
 fi
 
-# --- Test: Profile functions exist ---
-echo "[T6] Profile utility functions"
-PROFILE_FUNCS="read_profile write_profile get_active_profile set_active_profile mask_api_key"
+# --- Test: Core utility functions exist ---
+echo "[T6] Core utility functions"
+CORE_FUNCS="mask_api_key filter_sensitive load_cli_registry is_cli_installed"
 ALL_FOUND=true
-for fn in $PROFILE_FUNCS; do
+for fn in $CORE_FUNCS; do
     if ! bash -c "source '$SCRIPT_DIR/ai-menu.sh' --source-only; type $fn" &>/dev/null; then
         ALL_FOUND=false
         fail "$fn" "function not found"
     fi
 done
 if [ "$ALL_FOUND" = true ]; then
-    pass "All profile utility functions exist"
+    pass "All core utility functions exist"
 fi
 
 # --- Test: mask_api_key function ---
