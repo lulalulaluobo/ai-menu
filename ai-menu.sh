@@ -27,10 +27,11 @@ declare -a MAIN_MENU_OPTIONS=(
     "退出"
 )
 
-# CLI registry 缓存
-declare -A CLI_NAMES
-declare -A CLI_BINS
-declare -A CLI_INSTALL_CMDS
+# CLI registry 缓存（使用普通数组以兼容 macOS 默认 bash 3.2）
+CLI_KEYS=()
+CLI_NAMES=()
+CLI_BINS=()
+CLI_INSTALL_CMDS=()
 
 # ============================================================================
 # 工具函数
@@ -131,10 +132,16 @@ load_cli_registry() {
     # 提取 CLI 名称列表
     local cli_keys=$(grep -oE '"[a-z-]+"[[:space:]]*:[[:space:]]*\{' "$CLI_REGISTRY_FILE" | grep -oE '"[a-z-]+"' | tr -d '"')
     
+    CLI_KEYS=()
+    CLI_NAMES=()
+    CLI_BINS=()
+    CLI_INSTALL_CMDS=()
+    
     for key in $cli_keys; do
-        CLI_NAMES[$key]=$(grep -A 20 "\"$key\"" "$CLI_REGISTRY_FILE" | grep '"name"' | head -1 | sed -E 's/.*"name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
-        CLI_BINS[$key]=$(grep -A 20 "\"$key\"" "$CLI_REGISTRY_FILE" | grep '"bin"' | head -1 | sed -E 's/.*"bin"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
-        CLI_INSTALL_CMDS[$key]=$(grep -A 20 "\"$key\"" "$CLI_REGISTRY_FILE" | grep '"install"' | head -1 | sed -E 's/.*"install"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+        CLI_KEYS+=("$key")
+        CLI_NAMES+=("$(grep -A 20 "\"$key\"" "$CLI_REGISTRY_FILE" | grep '"name"' | head -1 | sed -E 's/.*"name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')")
+        CLI_BINS+=("$(grep -A 20 "\"$key\"" "$CLI_REGISTRY_FILE" | grep '"bin"' | head -1 | sed -E 's/.*"bin"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')")
+        CLI_INSTALL_CMDS+=("$(grep -A 20 "\"$key\"" "$CLI_REGISTRY_FILE" | grep '"install"' | head -1 | sed -E 's/.*"install"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')")
     done
 }
 
@@ -294,9 +301,9 @@ do_health_check() {
     # CLI 检测
     echo "【Target CLI 状态】"
     load_cli_registry
-    for key in "${!CLI_NAMES[@]}"; do
-        local cli_name="${CLI_NAMES[$key]}"
-        local bin_name="${CLI_BINS[$key]}"
+    for i in "${!CLI_NAMES[@]}"; do
+        local cli_name="${CLI_NAMES[$i]}"
+        local bin_name="${CLI_BINS[$i]}"
         
         if is_cli_installed "$bin_name"; then
             local version=$(get_cli_version "$bin_name")
@@ -329,8 +336,8 @@ do_health_check() {
     
     # PATH 冲突检测
     echo "【PATH 冲突检测】"
-    for key in "${!CLI_BINS[@]}"; do
-        local bin_name="${CLI_BINS[$key]}"
+    for i in "${!CLI_BINS[@]}"; do
+        local bin_name="${CLI_BINS[$i]}"
         local paths=$(which -a "$bin_name" 2>/dev/null || true)
         local path_count=$(echo "$paths" | grep -c . || true)
         
@@ -375,9 +382,9 @@ do_install_cli_action() {
     local options=()
     local cli_keys=()
     
-    for key in "${!CLI_NAMES[@]}"; do
-        local cli_name="${CLI_NAMES[$key]}"
-        local bin_name="${CLI_BINS[$key]}"
+    for i in "${!CLI_NAMES[@]}"; do
+        local cli_name="${CLI_NAMES[$i]}"
+        local bin_name="${CLI_BINS[$i]}"
         
         if is_cli_installed "$bin_name"; then
             local version=$(get_cli_version "$bin_name")
@@ -385,7 +392,7 @@ do_install_cli_action() {
         else
             options+=("$cli_name [未安装]")
         fi
-        cli_keys+=("$key")
+        cli_keys+=("$i")
     done
     options+=("返回")
     
@@ -395,9 +402,10 @@ do_install_cli_action() {
         return
     fi
     
-    local selected_key="${cli_keys[$choice]}"
-    local cli_name="${CLI_NAMES[$selected_key]}"
-    local install_cmd="${CLI_INSTALL_CMDS[$selected_key]}"
+    local selected_index="${cli_keys[$choice]}"
+    local registry_key="${CLI_KEYS[$selected_index]}"
+    local cli_name="${CLI_NAMES[$selected_index]}"
+    local install_cmd="${CLI_INSTALL_CMDS[$selected_index]}"
     
     # 检查是否有安装命令
     if [ -z "$install_cmd" ] || [ "$install_cmd" = "null" ]; then
@@ -406,7 +414,7 @@ do_install_cli_action() {
         print_warning "$cli_name 需要手动安装"
         echo ""
         
-        local install_guide=$(grep -A 20 "\"$selected_key\"" "$CLI_REGISTRY_FILE" | grep '"install_guide"' | head -1 | sed -E 's/.*"install_guide"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+        local install_guide=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"install_guide"' | head -1 | sed -E 's/.*"install_guide"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
         if [ -n "$install_guide" ]; then
             echo -e "${COLOR_YELLOW}$install_guide${COLOR_RESET}"
         fi
@@ -435,7 +443,7 @@ do_install_cli_action() {
     # 执行安装
     if eval "$install_cmd"; then
         echo ""
-        local version=$(get_cli_version "${CLI_BINS[$selected_key]}")
+        local version=$(get_cli_version "${CLI_BINS[$selected_index]}")
         print_success "$cli_name 安装成功！版本: $version"
     else
         echo ""
@@ -459,14 +467,14 @@ do_update_cli_action() {
     local options=()
     local cli_keys=()
     
-    for key in "${!CLI_NAMES[@]}"; do
-        local cli_name="${CLI_NAMES[$key]}"
-        local bin_name="${CLI_BINS[$key]}"
+    for i in "${!CLI_NAMES[@]}"; do
+        local cli_name="${CLI_NAMES[$i]}"
+        local bin_name="${CLI_BINS[$i]}"
         
         if is_cli_installed "$bin_name"; then
             local version=$(get_cli_version "$bin_name")
             options+=("$cli_name [$version]")
-            cli_keys+=("$key")
+            cli_keys+=("$i")
         fi
     done
     
@@ -484,9 +492,10 @@ do_update_cli_action() {
         return
     fi
     
-    local selected_key="${cli_keys[$choice]}"
-    local cli_name="${CLI_NAMES[$selected_key]}"
-    local update_cmd=$(grep -A 20 "\"$selected_key\"" "$CLI_REGISTRY_FILE" | grep '"update"' | head -1 | sed -E 's/.*"update"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+    local selected_index="${cli_keys[$choice]}"
+    local registry_key="${CLI_KEYS[$selected_index]}"
+    local cli_name="${CLI_NAMES[$selected_index]}"
+    local update_cmd=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"update"' | head -1 | sed -E 's/.*"update"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
     
     if [ -z "$update_cmd" ] || [ "$update_cmd" = "null" ]; then
         print_warning "$cli_name 没有自动更新命令"
@@ -511,7 +520,7 @@ do_update_cli_action() {
     # 执行更新
     if eval "$update_cmd"; then
         echo ""
-        local version=$(get_cli_version "${CLI_BINS[$selected_key]}")
+        local version=$(get_cli_version "${CLI_BINS[$selected_index]}")
         print_success "$cli_name 更新成功！版本: $version"
     else
         echo ""
@@ -553,13 +562,14 @@ do_login() {
     local options=()
     local cli_keys=()
     
-    for key in "${!CLI_NAMES[@]}"; do
+    for i in "${!CLI_NAMES[@]}"; do
+        local registry_key="${CLI_KEYS[$i]}"
         # 检查是否有 login 命令
-        local login_cmd=$(grep -A 20 "\"$key\"" "$CLI_REGISTRY_FILE" | grep '"login"' | head -1 | sed -E 's/.*"login"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+        local login_cmd=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"login"' | head -1 | sed -E 's/.*"login"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
         
         if [ -n "$login_cmd" ] && [ "$login_cmd" != "null" ]; then
-            options+=("${CLI_NAMES[$key]}")
-            cli_keys+=("$key")
+            options+=("${CLI_NAMES[$i]}")
+            cli_keys+=("$i")
         fi
     done
     
@@ -577,9 +587,10 @@ do_login() {
         return
     fi
     
-    local selected_key="${cli_keys[$choice]}"
-    local cli_name="${CLI_NAMES[$selected_key]}"
-    local login_cmd=$(grep -A 20 "\"$selected_key\"" "$CLI_REGISTRY_FILE" | grep '"login"' | head -1 | sed -E 's/.*"login"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+    local selected_index="${cli_keys[$choice]}"
+    local registry_key="${CLI_KEYS[$selected_index]}"
+    local cli_name="${CLI_NAMES[$selected_index]}"
+    local login_cmd=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"login"' | head -1 | sed -E 's/.*"login"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
     
     clear
     echo ""
@@ -611,17 +622,18 @@ do_logout() {
     local options=()
     local cli_keys=()
     
-    for key in "${!CLI_NAMES[@]}"; do
-        local auto_logout=$(grep -A 20 "\"$key\"" "$CLI_REGISTRY_FILE" | grep '"auto_logout"' | head -1 | sed -E 's/.*"auto_logout"[[:space:]]*:[[:space:]]*([^,}]+).*/\1/')
-        local logout_cmd=$(grep -A 20 "\"$key\"" "$CLI_REGISTRY_FILE" | grep '"logout"' | head -1 | sed -E 's/.*"logout"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
-        local logout_guide=$(grep -A 20 "\"$key\"" "$CLI_REGISTRY_FILE" | grep '"logout_guide"' | head -1 | sed -E 's/.*"logout_guide"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+    for i in "${!CLI_NAMES[@]}"; do
+        local registry_key="${CLI_KEYS[$i]}"
+        local auto_logout=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"auto_logout"' | head -1 | sed -E 's/.*"auto_logout"[[:space:]]*:[[:space:]]*([^,}]+).*/\1/')
+        local logout_cmd=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"logout"' | head -1 | sed -E 's/.*"logout"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+        local logout_guide=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"logout_guide"' | head -1 | sed -E 's/.*"logout_guide"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
         
         if [ "$auto_logout" = "true" ] && [ -n "$logout_cmd" ] && [ "$logout_cmd" != "null" ]; then
-            options+=("${CLI_NAMES[$key]}")
-            cli_keys+=("$key")
+            options+=("${CLI_NAMES[$i]}")
+            cli_keys+=("$i")
         elif [ -n "$logout_guide" ]; then
-            options+=("${CLI_NAMES[$key]} [需手动]")
-            cli_keys+=("$key")
+            options+=("${CLI_NAMES[$i]} [需手动]")
+            cli_keys+=("$i")
         fi
     done
     
@@ -639,11 +651,12 @@ do_logout() {
         return
     fi
     
-    local selected_key="${cli_keys[$choice]}"
-    local cli_name="${CLI_NAMES[$selected_key]}"
-    local auto_logout=$(grep -A 20 "\"$selected_key\"" "$CLI_REGISTRY_FILE" | grep '"auto_logout"' | head -1 | sed -E 's/.*"auto_logout"[[:space:]]*:[[:space:]]*([^,}]+).*/\1/')
-    local logout_cmd=$(grep -A 20 "\"$selected_key\"" "$CLI_REGISTRY_FILE" | grep '"logout"' | head -1 | sed -E 's/.*"logout"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
-    local logout_guide=$(grep -A 20 "\"$selected_key\"" "$CLI_REGISTRY_FILE" | grep '"logout_guide"' | head -1 | sed -E 's/.*"logout_guide"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+    local selected_index="${cli_keys[$choice]}"
+    local registry_key="${CLI_KEYS[$selected_index]}"
+    local cli_name="${CLI_NAMES[$selected_index]}"
+    local auto_logout=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"auto_logout"' | head -1 | sed -E 's/.*"auto_logout"[[:space:]]*:[[:space:]]*([^,}]+).*/\1/')
+    local logout_cmd=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"logout"' | head -1 | sed -E 's/.*"logout"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+    local logout_guide=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"logout_guide"' | head -1 | sed -E 's/.*"logout_guide"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
     
     clear
     echo ""
@@ -684,16 +697,16 @@ do_start_ai() {
     local options=()
     local cli_keys=()
     
-    for key in "${!CLI_NAMES[@]}"; do
-        local cli_name="${CLI_NAMES[$key]}"
-        local bin_name="${CLI_BINS[$key]}"
+    for i in "${!CLI_NAMES[@]}"; do
+        local cli_name="${CLI_NAMES[$i]}"
+        local bin_name="${CLI_BINS[$i]}"
         
         if is_cli_installed "$bin_name"; then
             options+=("$cli_name")
         else
             options+=("$cli_name [未安装]")
         fi
-        cli_keys+=("$key")
+        cli_keys+=("$i")
     done
     options+=("返回主菜单")
     
@@ -703,9 +716,9 @@ do_start_ai() {
         return
     fi
     
-    local selected_key="${cli_keys[$choice]}"
-    local cli_name="${CLI_NAMES[$selected_key]}"
-    local bin_name="${CLI_BINS[$selected_key]}"
+    local selected_index="${cli_keys[$choice]}"
+    local cli_name="${CLI_NAMES[$selected_index]}"
+    local bin_name="${CLI_BINS[$selected_index]}"
     
     if ! is_cli_installed "$bin_name"; then
         print_warning "$cli_name 未安装，请先安装"
@@ -1134,9 +1147,9 @@ main_menu() {
         echo -e "${COLOR_RESET}CLI 状态:${COLOR_RESET}"
         
         load_cli_registry
-        for key in "${!CLI_NAMES[@]}"; do
-            local cli_name="${CLI_NAMES[$key]}"
-            local bin_name="${CLI_BINS[$key]}"
+        for i in "${!CLI_NAMES[@]}"; do
+            local cli_name="${CLI_NAMES[$i]}"
+            local bin_name="${CLI_BINS[$i]}"
             
             if is_cli_installed "$bin_name"; then
                 echo -e "  ${COLOR_GREEN}[OK] $cli_name${COLOR_RESET}"

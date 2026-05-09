@@ -28,6 +28,17 @@ temp/
 .idea/
 .vscode/
 *.code-workspace
+.config.kiro
+
+# Local development planning notes
+requirements.md
+design.md
+tasks.md
+PROGRESS.md
+COMPLETION_SUMMARY.md
+SIMPLIFICATION.md
+UPDATE_SUMMARY.md
+FEATURES.md
 
 # Test and language caches
 __pycache__/

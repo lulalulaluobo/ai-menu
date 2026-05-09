@@ -8,7 +8,7 @@ $ErrorActionPreference = "Stop"
 
 # 配置
 $INSTALL_DIR = Join-Path $env:USERPROFILE ".ai-menu"
-$REPO_BASE = "https://raw.githubusercontent.com/your-repo/ai-menu/main"
+$REPO_BASE = "https://raw.githubusercontent.com/lulalulaluobo/ai-menu/main"
 $FILES_TO_DOWNLOAD = @(
     "ai-menu.ps1",
     "cli-registry.json"

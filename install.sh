@@ -6,7 +6,7 @@ set -euo pipefail
 
 # 配置
 INSTALL_DIR="$HOME/.ai-menu"
-REPO_BASE="https://raw.githubusercontent.com/your-repo/ai-menu/main"
+REPO_BASE="https://raw.githubusercontent.com/lulalulaluobo/ai-menu/main"
 FILES_TO_DOWNLOAD=(
     "ai-menu.sh"
     "cli-registry.json"
