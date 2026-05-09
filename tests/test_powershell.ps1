@@ -80,7 +80,7 @@ if (Get-Command Load-CliRegistry -ErrorAction SilentlyContinue) {
 
 # --- T6: Profile utility functions ---
 Write-Host "[T6] Core utility functions"
-$coreFuncs = @("Hide-ApiKey", "Hide-SensitiveInfo", "Load-CliRegistry", "Get-CliInstalled")
+$coreFuncs = @("Hide-ApiKey", "Hide-SensitiveInfo", "Load-CliRegistry", "Get-RegistryItem", "Get-CliInstalled")
 $allFound = $true
 foreach ($fn in $coreFuncs) {
     if (-not (Get-Command $fn -ErrorAction SilentlyContinue)) {
@@ -90,6 +90,54 @@ foreach ($fn in $coreFuncs) {
 }
 if ($allFound) {
     Test-Pass "All core utility functions exist"
+}
+
+# --- T6b: Registry-backed login/logout options ---
+Write-Host "[T6b] Login/logout registry options"
+if (Get-Command Get-RegistryItem -ErrorAction SilentlyContinue) {
+    try {
+        $registry = Load-CliRegistry
+        $loginOptions = @()
+        $logoutOptions = @()
+        
+        foreach ($key in $registry.PSObject.Properties.Name) {
+            $cli = Get-RegistryItem -Registry $registry -Key $key
+            if ($cli.login) {
+                $loginOptions += "$($cli.name)"
+            }
+            if ($cli.auto_logout -and $cli.logout) {
+                $logoutOptions += "$($cli.name)"
+            } elseif ($cli.logout_guide) {
+                $logoutOptions += "$($cli.name) [需手动]"
+            }
+        }
+        
+        $expectedLogin = @("Codex CLI", "Gemini CLI", "Claude Code", "Claude GLM (智谱)")
+        $expectedLogout = @("Codex CLI", "Gemini CLI [需手动]", "Claude Code", "OpenCode [需手动]", "Claude GLM (智谱)")
+        
+        if (($loginOptions -join "|") -eq ($expectedLogin -join "|") -and
+            ($logoutOptions -join "|") -eq ($expectedLogout -join "|")) {
+            Test-Pass "Login/logout options match registry metadata"
+        } else {
+            Test-Fail "login/logout options" "login=[$($loginOptions -join ', ')] logout=[$($logoutOptions -join ', ')]"
+        }
+    } catch {
+        Test-Fail "login/logout options" $_.Exception.Message
+    }
+} else {
+    Test-Fail "login/logout options" "Get-RegistryItem not found"
+}
+
+# --- T6c: No raw ANSI escape sequences in PowerShell UI ---
+Write-Host "[T6c] PowerShell UI selection rendering"
+$scriptContent = Get-Content $ScriptPath -Raw -Encoding UTF8
+if ($scriptContent -notmatch '`e\[' -and
+    $scriptContent -notmatch 'COLOR_' -and
+    $scriptContent -notmatch 'BackgroundColor' -and
+    $scriptContent -match '\*\* \$\(\$i \+ 1\)\.') {
+    Test-Pass "PowerShell UI uses plain text selection markers"
+} else {
+    Test-Fail "PowerShell UI selection" "raw ANSI/background colors are present or plain text marker is missing"
 }
 
 # --- T7: Hide-ApiKey function ---

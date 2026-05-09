@@ -86,6 +86,39 @@ print_info() {
     echo -e "${COLOR_BLUE}[INFO]${COLOR_RESET} $1"
 }
 
+normalize_key() {
+    local key="$1"
+    
+    case "$key" in
+        $'\x1b[A'|$'\x1bOA') echo "up" ;;
+        $'\x1b[B'|$'\x1bOB') echo "down" ;;
+        $'\x1bOM') echo "enter" ;;
+        ""|$'\n'|$'\r') echo "enter" ;;
+        [1-9]) echo "$key" ;;
+        *) echo "" ;;
+    esac
+}
+
+read_menu_key() {
+    local __result_var="${1:-}"
+    local key
+    local rest
+    local normalized
+    
+    IFS= read -rsn1 key || return 1
+    if [ "$key" = $'\x1b' ]; then
+        IFS= read -rsn2 -t 1 rest || rest=""
+        key="${key}${rest}"
+    fi
+    
+    normalized="$(normalize_key "$key")"
+    if [ -n "$__result_var" ]; then
+        eval "$__result_var=\$normalized"
+    else
+        echo "$normalized"
+    fi
+}
+
 # ============================================================================
 # 菜单引擎
 # ============================================================================
@@ -98,41 +131,43 @@ select_menu() {
     local option_count=${#options[@]}
     
     while true; do
-        clear
-        echo ""
-        echo -e "${COLOR_BLUE}=== $title ===${COLOR_RESET}"
-        echo ""
+        clear >&2
+        echo "" >&2
+        echo -e "${COLOR_BLUE}=== $title ===${COLOR_RESET}" >&2
+        echo "" >&2
         
         for i in "${!options[@]}"; do
             if [ $i -eq $selected ]; then
-                echo -e "${COLOR_HIGHLIGHT} $((i+1)). ${options[$i]} ${COLOR_RESET}"
+                echo -e "${COLOR_HIGHLIGHT} $((i+1)). ${options[$i]} ${COLOR_RESET}" >&2
             else
-                echo " $((i+1)). ${options[$i]}"
+                echo " $((i+1)). ${options[$i]}" >&2
             fi
         done
         
-        echo ""
-        echo -e "${COLOR_RESET}使用 ↑↓ 选择，回车确认${COLOR_RESET}"
+        echo "" >&2
+        echo -e "${COLOR_RESET}使用 ↑↓ 选择，回车确认${COLOR_RESET}" >&2
         
-        # 读取按键
-        read -rsn1 key
+        local key_action
+        read_menu_key key_action
         
-        # 处理箭头键（ESC [ A/B）
-        if [ "$key" = $'\x1b' ]; then
-            read -rsn2 -t 0.1 key
-            case "$key" in
-                '[A') # Up
-                    selected=$(( (selected - 1 + option_count) % option_count ))
-                    ;;
-                '[B') # Down
-                    selected=$(( (selected + 1) % option_count ))
-                    ;;
-            esac
-        elif [ "$key" = "" ]; then
-            # Enter
-            echo "$selected"
-            return 0
-        fi
+        case "$key_action" in
+            up)
+                selected=$(( (selected - 1 + option_count) % option_count ))
+                ;;
+            down)
+                selected=$(( (selected + 1) % option_count ))
+                ;;
+            enter)
+                echo "$selected"
+                return 0
+                ;;
+            [1-9])
+                if [ "$key_action" -le "$option_count" ]; then
+                    echo $((key_action - 1))
+                    return 0
+                fi
+                ;;
+        esac
     done
 }
 
@@ -157,10 +192,34 @@ load_cli_registry() {
     
     for key in $cli_keys; do
         CLI_KEYS+=("$key")
-        CLI_NAMES+=("$(grep -A 20 "\"$key\"" "$CLI_REGISTRY_FILE" | grep '"name"' | head -1 | sed -E 's/.*"name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')")
-        CLI_BINS+=("$(grep -A 20 "\"$key\"" "$CLI_REGISTRY_FILE" | grep '"bin"' | head -1 | sed -E 's/.*"bin"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')")
-        CLI_INSTALL_CMDS+=("$(grep -A 20 "\"$key\"" "$CLI_REGISTRY_FILE" | grep '"install"' | head -1 | sed -E 's/.*"install"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')")
+        CLI_NAMES+=("$(get_registry_value "$key" "name")")
+        CLI_BINS+=("$(get_registry_value "$key" "bin")")
+        CLI_INSTALL_CMDS+=("$(get_registry_value "$key" "install")")
     done
+}
+
+get_registry_value() {
+    local object_key="$1"
+    local field_name="$2"
+    
+    awk -v object_key="$object_key" -v field_name="$field_name" '
+        $0 ~ "^  \"" object_key "\"[[:space:]]*:[[:space:]]*\\{" {
+            in_object = 1
+            next
+        }
+        in_object && $0 ~ /^  "[^"]+"[[:space:]]*:[[:space:]]*\{/ {
+            exit
+        }
+        in_object && $0 ~ "\"" field_name "\"[[:space:]]*:" {
+            line = $0
+            sub(/\r$/, "", line)
+            sub(/^[^:]*:[[:space:]]*/, "", line)
+            sub(/[[:space:]]*,[[:space:]]*$/, "", line)
+            gsub(/^"|"$/, "", line)
+            print line
+            exit
+        }
+    ' "$CLI_REGISTRY_FILE"
 }
 
 is_cli_installed() {
@@ -432,7 +491,7 @@ do_install_cli_action() {
         print_warning "$cli_name 需要手动安装"
         echo ""
         
-        local install_guide=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"install_guide"' | head -1 | sed -E 's/.*"install_guide"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+        local install_guide=$(get_registry_value "$registry_key" "install_guide")
         if [ -n "$install_guide" ]; then
             echo -e "${COLOR_YELLOW}$install_guide${COLOR_RESET}"
         fi
@@ -513,7 +572,7 @@ do_update_cli_action() {
     local selected_index="${cli_keys[$choice]}"
     local registry_key="${CLI_KEYS[$selected_index]}"
     local cli_name="${CLI_NAMES[$selected_index]}"
-    local update_cmd=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"update"' | head -1 | sed -E 's/.*"update"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+    local update_cmd=$(get_registry_value "$registry_key" "update")
     
     if [ -z "$update_cmd" ] || [ "$update_cmd" = "null" ]; then
         print_warning "$cli_name 没有自动更新命令"
@@ -583,7 +642,7 @@ do_login() {
     for i in "${!CLI_NAMES[@]}"; do
         local registry_key="${CLI_KEYS[$i]}"
         # 检查是否有 login 命令
-        local login_cmd=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"login"' | head -1 | sed -E 's/.*"login"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+        local login_cmd=$(get_registry_value "$registry_key" "login")
         
         if [ -n "$login_cmd" ] && [ "$login_cmd" != "null" ]; then
             options+=("${CLI_NAMES[$i]}")
@@ -608,7 +667,7 @@ do_login() {
     local selected_index="${cli_keys[$choice]}"
     local registry_key="${CLI_KEYS[$selected_index]}"
     local cli_name="${CLI_NAMES[$selected_index]}"
-    local login_cmd=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"login"' | head -1 | sed -E 's/.*"login"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+    local login_cmd=$(get_registry_value "$registry_key" "login")
     
     clear
     echo ""
@@ -642,9 +701,9 @@ do_logout() {
     
     for i in "${!CLI_NAMES[@]}"; do
         local registry_key="${CLI_KEYS[$i]}"
-        local auto_logout=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"auto_logout"' | head -1 | sed -E 's/.*"auto_logout"[[:space:]]*:[[:space:]]*([^,}]+).*/\1/')
-        local logout_cmd=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"logout"' | head -1 | sed -E 's/.*"logout"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
-        local logout_guide=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"logout_guide"' | head -1 | sed -E 's/.*"logout_guide"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+        local auto_logout=$(get_registry_value "$registry_key" "auto_logout")
+        local logout_cmd=$(get_registry_value "$registry_key" "logout")
+        local logout_guide=$(get_registry_value "$registry_key" "logout_guide")
         
         if [ "$auto_logout" = "true" ] && [ -n "$logout_cmd" ] && [ "$logout_cmd" != "null" ]; then
             options+=("${CLI_NAMES[$i]}")
@@ -672,9 +731,9 @@ do_logout() {
     local selected_index="${cli_keys[$choice]}"
     local registry_key="${CLI_KEYS[$selected_index]}"
     local cli_name="${CLI_NAMES[$selected_index]}"
-    local auto_logout=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"auto_logout"' | head -1 | sed -E 's/.*"auto_logout"[[:space:]]*:[[:space:]]*([^,}]+).*/\1/')
-    local logout_cmd=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"logout"' | head -1 | sed -E 's/.*"logout"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
-    local logout_guide=$(grep -A 20 "\"$registry_key\"" "$CLI_REGISTRY_FILE" | grep '"logout_guide"' | head -1 | sed -E 's/.*"logout_guide"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+    local auto_logout=$(get_registry_value "$registry_key" "auto_logout")
+    local logout_cmd=$(get_registry_value "$registry_key" "logout")
+    local logout_guide=$(get_registry_value "$registry_key" "logout_guide")
     
     clear
     echo ""
@@ -1177,39 +1236,48 @@ main_menu() {
         done
         echo -e "${COLOR_RESET}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${COLOR_RESET}"
         
-        # 读取按键
-        read -rsn1 key
+        local key_action
+        read_menu_key key_action
         
-        if [ "$key" = $'\x1b' ]; then
-            read -rsn2 -t 0.1 key
-            case "$key" in
-                '[A') # Up
-                    selected=$(( (selected - 1 + option_count) % option_count ))
-                    ;;
-                '[B') # Down
-                    selected=$(( (selected + 1) % option_count ))
-                    ;;
-            esac
-        elif [ "$key" = "" ]; then
-            # Enter - 执行选中的功能
-            case $selected in
-                0) do_health_check ;;
-                1) do_install_cli ;;
-                2) do_login_logout ;;
-                3) do_start_ai ;;
-                4)
-                    clear
-                    echo -e "${COLOR_GREEN}再见！${COLOR_RESET}"
-                    exit 0
-                    ;;
-            esac
-        fi
+        case "$key_action" in
+            up)
+                selected=$(( (selected - 1 + option_count) % option_count ))
+                ;;
+            down)
+                selected=$(( (selected + 1) % option_count ))
+                ;;
+            enter)
+                # Enter - 执行选中的功能
+                case $selected in
+                    0) do_health_check ;;
+                    1) do_install_cli ;;
+                    2) do_login_logout ;;
+                    3) do_start_ai ;;
+                    4)
+                        clear
+                        echo -e "${COLOR_GREEN}再见！${COLOR_RESET}"
+                        exit 0
+                        ;;
+                esac
+                ;;
+            [1-5])
+                selected=$((key_action - 1))
+                # 数字键 - 直接执行对应功能
+                case $selected in
+                    0) do_health_check ;;
+                    1) do_install_cli ;;
+                    2) do_login_logout ;;
+                    3) do_start_ai ;;
+                    4)
+                        clear
+                        echo -e "${COLOR_GREEN}再见！${COLOR_RESET}"
+                        exit 0
+                        ;;
+                esac
+                ;;
+        esac
     done
 }
-
-# ============================================================================
-# 入口
-# ============================================================================
 
 # 测试模式：只加载函数，不启动主菜单
 if [ "${1:-}" = "--source-only" ]; then

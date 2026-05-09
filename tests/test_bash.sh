@@ -67,7 +67,7 @@ rm -rf "$TMP_BIN"
 
 # --- Test: Core utility functions exist ---
 echo "[T6] Core utility functions"
-CORE_FUNCS="mask_api_key filter_sensitive load_cli_registry is_cli_installed"
+CORE_FUNCS="mask_api_key filter_sensitive load_cli_registry is_cli_installed normalize_key"
 ALL_FOUND=true
 for fn in $CORE_FUNCS; do
     if ! bash -c "source '$SCRIPT_DIR/ai-menu.sh' --source-only; type $fn" &>/dev/null; then
@@ -77,6 +77,33 @@ for fn in $CORE_FUNCS; do
 done
 if [ "$ALL_FOUND" = true ]; then
     pass "All core utility functions exist"
+fi
+
+# --- Test: Key sequence normalization ---
+echo "[T6b] Key sequence normalization"
+if bash -c "source '$SCRIPT_DIR/ai-menu.sh' --source-only; [[ \$(normalize_key \$'\\e[A') = up ]] && [[ \$(normalize_key \$'\\eOA') = up ]] && [[ \$(normalize_key \$'\\e[B') = down ]] && [[ \$(normalize_key \$'\\eOB') = down ]] && [[ \$(normalize_key \$'\\eOM') = enter ]] && [[ \$(normalize_key \$'\\n') = enter ]] && [[ \$(normalize_key 3) = 3 ]]" 2>/dev/null; then
+    pass "normalize_key supports macOS and xterm arrow sequences"
+else
+    fail "normalize_key" "expected arrow, enter, and number keys to normalize"
+fi
+
+# --- Test: select_menu only returns choice on stdout ---
+echo "[T6c] Submenu output channel"
+CHOICE=$(printf '\n' | bash -c "source '$SCRIPT_DIR/ai-menu.sh' --source-only; select_menu 'Test Menu' 'One' 'Two'" 2>/dev/null)
+if [[ "$CHOICE" == "0" ]]; then
+    pass "select_menu returns only the selected index on stdout"
+else
+    fail "select_menu stdout" "expected '0', got '$CHOICE'"
+fi
+
+# --- Test: Registry field extraction does not bleed across CLI entries ---
+echo "[T6d] Registry field extraction"
+REGISTRY_VALUES=$(bash -c "source '$SCRIPT_DIR/ai-menu.sh' --source-only; load_cli_registry; for i in \"\${!CLI_KEYS[@]}\"; do key=\${CLI_KEYS[\$i]}; auto=\$(get_registry_value \"\$key\" auto_logout); logout=\$(get_registry_value \"\$key\" logout); guide=\$(get_registry_value \"\$key\" logout_guide); if [ \"\$auto\" = true ] && [ -n \"\$logout\" ] && [ \"\$logout\" != null ]; then label=\"\${CLI_NAMES[\$i]}\"; elif [ -n \"\$guide\" ]; then label=\"\${CLI_NAMES[\$i]} [需手动]\"; else continue; fi; printf '%s|' \"\$label\"; done" 2>/dev/null)
+EXPECTED_REGISTRY_VALUES="Codex CLI|Gemini CLI [需手动]|Claude Code|OpenCode [需手动]|Claude GLM (智谱)|"
+if [[ "$REGISTRY_VALUES" == "$EXPECTED_REGISTRY_VALUES" ]]; then
+    pass "Logout labels match registry metadata"
+else
+    fail "logout labels" "expected '$EXPECTED_REGISTRY_VALUES', got '$REGISTRY_VALUES'"
 fi
 
 # --- Test: mask_api_key function ---

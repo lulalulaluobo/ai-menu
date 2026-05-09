@@ -22,7 +22,7 @@
 | Gemini CLI | `gemini` | npm | 自动 | 手动引导 | Google Gemini |
 | Claude Code | `claude` | npm | 自动 | 自动 | Anthropic Claude Code |
 | OpenCode | `opencode` | npm | 配置文件 | 配置文件 | OpenCode AI |
-| DeepSeek TUI | `deepseek-tui` | 手动安装引导 | - | - | DeepSeek TUI |
+| DeepSeek TUI | `deepseek-tui` | npm | - | - | DeepSeek TUI |
 | Claude GLM | `claude` | npx | 自动 | 自动 | 智谱 GLM 的 Claude Code 安装脚本 |
 
 ## 安装

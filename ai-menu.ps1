@@ -15,14 +15,6 @@ $script:CONFIG_HOME = Join-Path $env:USERPROFILE ".ai-menu"
 $script:SCRIPT_DIR = $PSScriptRoot
 $script:CLI_REGISTRY_FILE = Join-Path $script:SCRIPT_DIR "cli-registry.json"
 
-# 颜色定义
-$script:COLOR_RESET = "`e[0m"
-$script:COLOR_HIGHLIGHT = "`e[7m"
-$script:COLOR_GREEN = "`e[32m"
-$script:COLOR_RED = "`e[31m"
-$script:COLOR_YELLOW = "`e[33m"
-$script:COLOR_BLUE = "`e[34m"
-
 # 主菜单选项
 $script:MAIN_MENU_OPTIONS = @(
     "环境体检",
@@ -51,22 +43,22 @@ function Hide-SensitiveInfo {
 
 function Write-Success {
     param([string]$Message)
-    Write-Host ($script:COLOR_GREEN + '[OK] ' + $Message + $script:COLOR_RESET)
+    Write-Host "[OK] $Message" -ForegroundColor Green
 }
 
 function Write-Error-Message {
     param([string]$Message)
-    Write-Host ($script:COLOR_RED + '[ERROR] ' + $Message + $script:COLOR_RESET)
+    Write-Host "[ERROR] $Message" -ForegroundColor Red
 }
 
 function Write-Warning-Message {
     param([string]$Message)
-    Write-Host ($script:COLOR_YELLOW + '[WARN] ' + $Message + $script:COLOR_RESET)
+    Write-Host "[WARN] $Message" -ForegroundColor Yellow
 }
 
 function Write-Info {
     param([string]$Message)
-    Write-Host ($script:COLOR_BLUE + '[INFO] ' + $Message + $script:COLOR_RESET)
+    Write-Host "[INFO] $Message" -ForegroundColor Cyan
 }
 
 # ============================================================================
@@ -90,7 +82,7 @@ function Select-Menu {
         
         for ($i = 0; $i -lt $optionCount; $i++) {
             if ($i -eq $selected) {
-                Write-Host "$script:COLOR_HIGHLIGHT $($i + 1). $($Options[$i]) $script:COLOR_RESET"
+                Write-Host "** $($i + 1). $($Options[$i]) **"
             } else {
                 Write-Host " $($i + 1). $($Options[$i])"
             }
@@ -132,6 +124,20 @@ function Load-CliRegistry {
         Write-Error-Message "无法加载 CLI registry: $($_.Exception.Message)"
         return $null
     }
+}
+
+function Get-RegistryItem {
+    param(
+        [Parameter(Mandatory=$true)]$Registry,
+        [Parameter(Mandatory=$true)][string]$Key
+    )
+    
+    $property = $Registry.PSObject.Properties[$Key]
+    if ($null -eq $property) {
+        return $null
+    }
+    
+    return $property.Value
 }
 
 function Get-CliInstalled {
@@ -330,7 +336,7 @@ function Invoke-HealthCheck {
     $registry = Load-CliRegistry
     if ($registry) {
         foreach ($cliKey in $registry.PSObject.Properties.Name) {
-            $cli = $registry.$cliKey
+            $cli = Get-RegistryItem -Registry $registry -Key $cliKey
             $binName = $cli.bin
             
             if (Get-CliInstalled $binName) {
@@ -366,7 +372,8 @@ function Invoke-HealthCheck {
     $registry = Load-CliRegistry
     if ($registry) {
         foreach ($cliKey in $registry.PSObject.Properties.Name) {
-            $binName = $registry.$cliKey.bin
+            $cli = Get-RegistryItem -Registry $registry -Key $cliKey
+            $binName = $cli.bin
             $paths = @(where.exe $binName 2>$null)
             
             if ($paths.Count -gt 1) {
@@ -417,7 +424,7 @@ function Invoke-InstallCliAction {
     $cliKeys = @()
     
     foreach ($key in $registry.PSObject.Properties.Name) {
-        $cli = $registry.$key
+        $cli = Get-RegistryItem -Registry $registry -Key $key
         $binName = $cli.bin
         
         if (Get-CliInstalled $binName) {
@@ -437,7 +444,7 @@ function Invoke-InstallCliAction {
     }
     
     $selectedKey = $cliKeys[$choice]
-    $cli = $registry.$selectedKey
+    $cli = Get-RegistryItem -Registry $registry -Key $selectedKey
     
     # 检查是否有安装命令
     if (-not $cli.install) {
@@ -513,7 +520,7 @@ function Invoke-UpdateCliAction {
     $cliKeys = @()
     
     foreach ($key in $registry.PSObject.Properties.Name) {
-        $cli = $registry.$key
+        $cli = Get-RegistryItem -Registry $registry -Key $key
         $binName = $cli.bin
         
         if (Get-CliInstalled $binName) {
@@ -538,7 +545,7 @@ function Invoke-UpdateCliAction {
     }
     
     $selectedKey = $cliKeys[$choice]
-    $cli = $registry.$selectedKey
+    $cli = Get-RegistryItem -Registry $registry -Key $selectedKey
     
     if (-not $cli.update) {
         Write-Warning-Message "$($cli.name) 没有自动更新命令"
@@ -622,7 +629,7 @@ function Invoke-Login {
     $cliKeys = @()
     
     foreach ($key in $registry.PSObject.Properties.Name) {
-        $cli = $registry.$key
+        $cli = Get-RegistryItem -Registry $registry -Key $key
         
         if ($cli.login) {
             $options += "$($cli.name)"
@@ -645,7 +652,7 @@ function Invoke-Login {
     }
     
     $selectedKey = $cliKeys[$choice]
-    $cli = $registry.$selectedKey
+    $cli = Get-RegistryItem -Registry $registry -Key $selectedKey
     
     Clear-Host
     Write-Host ""
@@ -685,7 +692,7 @@ function Invoke-Logout {
     $cliKeys = @()
     
     foreach ($key in $registry.PSObject.Properties.Name) {
-        $cli = $registry.$key
+        $cli = Get-RegistryItem -Registry $registry -Key $key
         
         if ($cli.auto_logout -and $cli.logout) {
             $options += "$($cli.name)"
@@ -711,7 +718,7 @@ function Invoke-Logout {
     }
     
     $selectedKey = $cliKeys[$choice]
-    $cli = $registry.$selectedKey
+    $cli = Get-RegistryItem -Registry $registry -Key $selectedKey
     
     Clear-Host
     Write-Host ""
@@ -760,7 +767,7 @@ function Invoke-StartAi {
     $cliKeys = @()
     
     foreach ($key in $registry.PSObject.Properties.Name) {
-        $cli = $registry.$key
+        $cli = Get-RegistryItem -Registry $registry -Key $key
         $binName = $cli.bin
         
         if (Get-CliInstalled $binName) {
@@ -780,7 +787,7 @@ function Invoke-StartAi {
     }
     
     $selectedKey = $cliKeys[$choice]
-    $cli = $registry.$selectedKey
+    $cli = Get-RegistryItem -Registry $registry -Key $selectedKey
     $binName = $cli.bin
     
     if (-not (Get-CliInstalled $binName)) {
@@ -965,7 +972,7 @@ function Invoke-CreateFromTemplate {
     $options = @()
     $templateKeys = @()
     foreach ($key in $templates.PSObject.Properties.Name) {
-        $tmpl = $templates.$key
+        $tmpl = Get-RegistryItem -Registry $templates -Key $key
         $options += "$($tmpl.name) - $($tmpl.description)"
         $templateKeys += $key
     }
@@ -976,7 +983,7 @@ function Invoke-CreateFromTemplate {
     if ($choice -eq $options.Count - 1) { return }
     
     $selectedKey = $templateKeys[$choice]
-    $template = $templates.$selectedKey
+    $template = Get-RegistryItem -Registry $templates -Key $selectedKey
     
     Clear-Host
     Write-Host ""
@@ -1211,7 +1218,7 @@ function Start-MainMenu {
         # 显示主菜单选项（带高亮）
         for ($i = 0; $i -lt $optionCount; $i++) {
             if ($i -eq $selected) {
-                Write-Host "$script:COLOR_HIGHLIGHT $($i + 1). $($script:MAIN_MENU_OPTIONS[$i]) $script:COLOR_RESET"
+                Write-Host "** $($i + 1). $($script:MAIN_MENU_OPTIONS[$i]) **"
             } else {
                 Write-Host " $($i + 1). $($script:MAIN_MENU_OPTIONS[$i])"
             }
@@ -1228,7 +1235,7 @@ function Start-MainMenu {
         $registry = Load-CliRegistry
         if ($registry) {
             foreach ($key in $registry.PSObject.Properties.Name) {
-                $cli = $registry.$key
+                $cli = Get-RegistryItem -Registry $registry -Key $key
                 $binName = $cli.bin
                 
                 if (Get-CliInstalled $binName) {
