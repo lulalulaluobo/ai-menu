@@ -80,7 +80,7 @@ if (Get-Command Load-CliRegistry -ErrorAction SilentlyContinue) {
 
 # --- T6: Profile utility functions ---
 Write-Host "[T6] Core utility functions"
-$coreFuncs = @("Hide-ApiKey", "Hide-SensitiveInfo", "Load-CliRegistry", "Get-RegistryItem", "Get-CliInstalled")
+$coreFuncs = @("Hide-ApiKey", "Hide-SensitiveInfo", "Load-CliRegistry", "Get-RegistryItem", "Get-CliInstalled", "Enable-UserNpmPrefix", "Invoke-CommandWithNpmFallback")
 $allFound = $true
 foreach ($fn in $coreFuncs) {
     if (-not (Get-Command $fn -ErrorAction SilentlyContinue)) {
@@ -139,6 +139,18 @@ if ($scriptContent -notmatch '`e\[' -and
     Test-Pass "PowerShell UI uses native white-background selection"
 } else {
     Test-Fail "PowerShell UI selection" "raw ANSI/background colors are present or plain text marker is missing"
+}
+
+# --- T6d: Windows npm install fallback ---
+Write-Host "[T6d] User-level npm fallback"
+if ($scriptContent -match 'Enable-UserNpmPrefix' -and
+    $scriptContent -match 'npm config set prefix' -and
+    $scriptContent -match 'Invoke-CommandWithNpmFallback' -and
+    $scriptContent -match '切换到用户级 npm 目录并重试' -and
+    $scriptContent -notmatch '请以管理员身份运行 PowerShell') {
+    Test-Pass "Failed npm installs can retry with a user-level prefix"
+} else {
+    Test-Fail "user npm fallback" "fallback flow is missing or old admin-only message remains"
 }
 
 # --- T7: Hide-ApiKey function ---

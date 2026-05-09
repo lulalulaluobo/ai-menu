@@ -162,6 +162,96 @@ function Get-CliVersion {
     }
 }
 
+function Test-IsAdministrator {
+    try {
+        return ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    } catch {
+        return $false
+    }
+}
+
+function Test-IsGlobalNpmCommand {
+    param([string]$Command)
+    return $Command -match '(^|\s)npm(\.cmd)?\s+.*\s(-g|--global)(\s|$)'
+}
+
+function Enable-UserNpmPrefix {
+    if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+        Write-Error-Message "未找到 npm，请先安装 Node.js"
+        return $false
+    }
+    
+    $prefix = Join-Path $env:USERPROFILE ".npm-global"
+    
+    try {
+        if (-not (Test-Path $prefix)) {
+            New-Item -ItemType Directory -Path $prefix -Force | Out-Null
+        }
+        
+        npm config set prefix $prefix
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error-Message "配置 npm 用户级目录失败"
+            return $false
+        }
+        
+        $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        $userPathParts = @($userPath -split ';' | Where-Object { $_ })
+        if ($userPathParts -notcontains $prefix) {
+            $newUserPath = if ([string]::IsNullOrWhiteSpace($userPath)) { $prefix } else { "$userPath;$prefix" }
+            [Environment]::SetEnvironmentVariable("Path", $newUserPath, "User")
+        }
+        
+        $processPathParts = @($env:Path -split ';' | Where-Object { $_ })
+        if ($processPathParts -notcontains $prefix) {
+            $env:Path = "$prefix;$env:Path"
+        }
+        
+        Write-Success "已切换到用户级 npm 目录: $prefix"
+        Write-Host "提示: 新终端会自动生效，当前窗口也已临时加入 PATH" -ForegroundColor Yellow
+        return $true
+    } catch {
+        Write-Error-Message "配置 npm 用户级目录失败: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Invoke-CommandWithNpmFallback {
+    param(
+        [Parameter(Mandatory=$true)][string]$Command,
+        [Parameter(Mandatory=$true)][string]$Action
+    )
+    
+    Invoke-Expression $Command
+    if ($LASTEXITCODE -eq 0) {
+        return $true
+    }
+    
+    if (-not (Test-IsGlobalNpmCommand $Command)) {
+        return $false
+    }
+    
+    Clear-Host
+    Write-Host ""
+    Write-Warning-Message "$Action 失败，可能是当前账号没有全局 npm 目录写入权限"
+    Write-Host ""
+    Write-Host "如果无法使用管理员权限，可以切换到用户级 npm 目录后重试。" -ForegroundColor Yellow
+    Write-Host ""
+    
+    $choice = Select-Menu -Title "npm 权限处理" -Options @(
+        "切换到用户级 npm 目录并重试",
+        "返回"
+    )
+    
+    if ($choice -eq 0) {
+        if (Enable-UserNpmPrefix) {
+            Invoke-Expression $Command
+            return ($LASTEXITCODE -eq 0)
+        }
+    }
+    
+    return $false
+}
+
 # ============================================================================
 # Profile 管理
 # ============================================================================
@@ -468,23 +558,9 @@ function Invoke-InstallCliAction {
     Write-Host "命令: $($cli.install)" -ForegroundColor DarkGray
     Write-Host ""
     
-    # 检查管理员权限
-    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    
-    if (-not $isAdmin) {
-        Write-Warning-Message "需要管理员权限安装全局 npm 包"
-        Write-Host "请以管理员身份运行 PowerShell，或使用 npm 的用户级安装" -ForegroundColor Yellow
-        Write-Host ""
-        Write-Host "按任意键返回..." -ForegroundColor DarkGray
-        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-        return
-    }
-    
     try {
         $installCmd = $cli.install
-        Invoke-Expression $installCmd
-        
-        if ($LASTEXITCODE -eq 0) {
+        if (Invoke-CommandWithNpmFallback -Command $installCmd -Action "安装") {
             Write-Host ""
             $version = Get-CliVersion $cli.bin
             Write-Success "$($cli.name) 安装成功！版本: $version"
@@ -560,22 +636,9 @@ function Invoke-UpdateCliAction {
     Write-Host "命令: $($cli.update)" -ForegroundColor DarkGray
     Write-Host ""
     
-    # 检查管理员权限
-    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    
-    if (-not $isAdmin) {
-        Write-Warning-Message "需要管理员权限更新全局 npm 包"
-        Write-Host ""
-        Write-Host "按任意键返回..." -ForegroundColor DarkGray
-        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-        return
-    }
-    
     try {
         $updateCmd = $cli.update
-        Invoke-Expression $updateCmd
-        
-        if ($LASTEXITCODE -eq 0) {
+        if (Invoke-CommandWithNpmFallback -Command $updateCmd -Action "更新") {
             Write-Host ""
             $version = Get-CliVersion $cli.bin
             Write-Success "$($cli.name) 更新成功！版本: $version"

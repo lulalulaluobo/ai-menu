@@ -67,7 +67,7 @@ rm -rf "$TMP_BIN"
 
 # --- Test: Core utility functions exist ---
 echo "[T6] Core utility functions"
-CORE_FUNCS="mask_api_key filter_sensitive load_cli_registry is_cli_installed normalize_key"
+CORE_FUNCS="mask_api_key filter_sensitive load_cli_registry is_cli_installed normalize_key is_global_npm_cmd enable_user_npm_prefix run_command_with_npm_fallback"
 ALL_FOUND=true
 for fn in $CORE_FUNCS; do
     if ! bash -c "source '$SCRIPT_DIR/ai-menu.sh' --source-only; type $fn" &>/dev/null; then
@@ -104,6 +104,20 @@ if [[ "$REGISTRY_VALUES" == "$EXPECTED_REGISTRY_VALUES" ]]; then
     pass "Logout labels match registry metadata"
 else
     fail "logout labels" "expected '$EXPECTED_REGISTRY_VALUES', got '$REGISTRY_VALUES'"
+fi
+
+# --- Test: npm permission fallback helpers ---
+echo "[T6e] npm permission helpers"
+if bash -c "source '$SCRIPT_DIR/ai-menu.sh' --source-only; is_global_npm_cmd 'npm i -g @google/gemini-cli' && is_global_npm_cmd 'npm install --global foo' && ! is_global_npm_cmd 'npx -y foo@latest'" 2>/dev/null; then
+    pass "npm global command detection works"
+else
+    fail "npm permission helpers" "global npm command detection failed"
+fi
+
+if grep -E "npm list -g|if ! npm list -g|resolve_npm_permission" "$SCRIPT_DIR/ai-menu.sh" >/dev/null; then
+    fail "npm permission flow" "old automatic sudo logic is still present"
+else
+    pass "npm permission flow retries user-level install after failure"
 fi
 
 # --- Test: mask_api_key function ---

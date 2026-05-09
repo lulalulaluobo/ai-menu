@@ -237,6 +237,102 @@ get_cli_version() {
     "$bin_name" --version 2>&1 || echo "未知版本"
 }
 
+is_global_npm_cmd() {
+    local cmd="$1"
+    [[ "$cmd" =~ (^|[[:space:]])npm[[:space:]].*[[:space:]](-g|--global)([[:space:]]|$) ]]
+}
+
+can_write_npm_prefix() {
+    local prefix
+    prefix=$(npm config get prefix 2>/dev/null || true)
+    [ -n "$prefix" ] && [ -d "$prefix" ] && [ -w "$prefix" ]
+}
+
+append_path_if_missing() {
+    local shell_file="$1"
+    local path_line='export PATH="$HOME/.npm-global/bin:$PATH"'
+    
+    [ -n "$shell_file" ] || return 0
+    touch "$shell_file"
+    
+    if ! grep -F "$path_line" "$shell_file" >/dev/null 2>&1; then
+        {
+            echo ""
+            echo "# ai-menu user-level npm global binaries"
+            echo "$path_line"
+        } >> "$shell_file"
+    fi
+}
+
+enable_user_npm_prefix() {
+    if ! command -v npm &>/dev/null; then
+        print_error "未找到 npm，请先安装 Node.js"
+        return 1
+    fi
+    
+    local prefix="$HOME/.npm-global"
+    mkdir -p "$prefix"
+    
+    if ! npm config set prefix "$prefix"; then
+        print_error "配置 npm 用户级目录失败"
+        return 1
+    fi
+    
+    export PATH="$prefix/bin:$PATH"
+    
+    case "${SHELL:-}" in
+        */zsh) append_path_if_missing "$HOME/.zshrc" ;;
+        */bash) append_path_if_missing "$HOME/.bashrc" ;;
+        *) append_path_if_missing "$HOME/.profile" ;;
+    esac
+    
+    print_success "已切换到用户级 npm 目录: $prefix"
+    print_warning "新终端会自动生效，当前窗口也已临时加入 PATH"
+    return 0
+}
+
+run_command_with_npm_fallback() {
+    local cmd="$1"
+    local action="$2"
+    local run_cmd="$cmd"
+    
+    if is_global_npm_cmd "$cmd" && ! can_write_npm_prefix; then
+        print_warning "npm 全局目录不可写，默认尝试使用 sudo ${action}"
+        run_cmd="sudo $cmd"
+    fi
+    
+    if eval "$run_cmd"; then
+        return 0
+    fi
+    
+    if ! is_global_npm_cmd "$cmd"; then
+        return 1
+    fi
+    
+    echo ""
+    print_warning "${action}失败，可能是当前账号没有全局 npm 目录写入权限"
+    echo ""
+    
+    local options=(
+        "切换到用户级 npm 目录并重试"
+        "返回"
+    )
+    
+    local choice=$(select_menu "npm 权限处理" "${options[@]}")
+    
+    case "$choice" in
+        0)
+            if enable_user_npm_prefix >&2; then
+                eval "$cmd"
+                return $?
+            else
+                return 1
+            fi
+            ;;
+        *) return 1 ;;
+    esac
+}
+
 # ============================================================================
 # Profile 管理
 # ============================================================================
@@ -509,16 +605,8 @@ do_install_cli_action() {
     echo -e "${COLOR_RESET}命令: $install_cmd${COLOR_RESET}"
     echo ""
     
-    # 检查是否需要 sudo
-    if ! npm list -g &>/dev/null 2>&1; then
-        # 需要 sudo
-        echo -e "${COLOR_YELLOW}需要 sudo 权限安装全局 npm 包${COLOR_RESET}"
-        echo ""
-        install_cmd="sudo $install_cmd"
-    fi
-    
     # 执行安装
-    if eval "$install_cmd"; then
+    if run_command_with_npm_fallback "$install_cmd" "安装"; then
         echo ""
         local version=$(get_cli_version "${CLI_BINS[$selected_index]}")
         print_success "$cli_name 安装成功！版本: $version"
@@ -587,15 +675,8 @@ do_update_cli_action() {
     echo -e "${COLOR_RESET}命令: $update_cmd${COLOR_RESET}"
     echo ""
     
-    # 检查是否需要 sudo
-    if ! npm list -g &>/dev/null 2>&1; then
-        echo -e "${COLOR_YELLOW}需要 sudo 权限更新全局 npm 包${COLOR_RESET}"
-        echo ""
-        update_cmd="sudo $update_cmd"
-    fi
-    
     # 执行更新
-    if eval "$update_cmd"; then
+    if run_command_with_npm_fallback "$update_cmd" "更新"; then
         echo ""
         local version=$(get_cli_version "${CLI_BINS[$selected_index]}")
         print_success "$cli_name 更新成功！版本: $version"
