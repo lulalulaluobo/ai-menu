@@ -54,6 +54,17 @@ else
     fail "CLI registry" "failed to load"
 fi
 
+# --- Test: CLI registry loading through symlinked command ---
+echo "[T5b] Symlinked command path"
+TMP_BIN="$(mktemp -d)"
+ln -s "$SCRIPT_DIR/ai-menu.sh" "$TMP_BIN/ai-menu"
+if bash -c "source '$TMP_BIN/ai-menu' --source-only; load_cli_registry; [[ \$CLI_REGISTRY_FILE = '$SCRIPT_DIR/cli-registry.json' ]]" 2>/dev/null; then
+    pass "CLI registry resolves from symlink target"
+else
+    fail "symlinked command path" "registry resolved relative to symlink directory"
+fi
+rm -rf "$TMP_BIN"
+
 # --- Test: Core utility functions exist ---
 echo "[T6] Core utility functions"
 CORE_FUNCS="mask_api_key filter_sensitive load_cli_registry is_cli_installed"

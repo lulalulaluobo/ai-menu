@@ -7,7 +7,25 @@ set -euo pipefail
 # 全局配置
 VERSION="1.0.0"
 CONFIG_HOME="$HOME/.ai-menu"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+resolve_script_dir() {
+    local source="${BASH_SOURCE[0]}"
+    local dir
+    local target
+    
+    while [ -h "$source" ]; do
+        dir="$(cd "$(dirname "$source")" && pwd)"
+        target="$(readlink "$source")"
+        case "$target" in
+            /*) source="$target" ;;
+            *) source="$dir/$target" ;;
+        esac
+    done
+    
+    cd "$(dirname "$source")" && pwd
+}
+
+SCRIPT_DIR="$(resolve_script_dir)"
 CLI_REGISTRY_FILE="$SCRIPT_DIR/cli-registry.json"
 
 # 颜色定义
